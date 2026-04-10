@@ -9,8 +9,8 @@ CREATE DATABASE tutorial;
 -- 授予權限
 GRANT ALL PRIVILEGES ON DATABASE tutorial TO lily;
 
--- 以下命令需要連線到 tutorial 資料庫後執行：
--- psql -U lily -d tutorial
+-- 切換到 tutorial 資料庫
+\c tutorial
 
 -- 建立 Schema
 CREATE SCHEMA faa;

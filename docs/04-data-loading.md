@@ -37,6 +37,8 @@ SELECT * FROM faa.d_cancellation_codes;
 
 比 INSERT 更快的批次載入方式，從文字檔（CSV/TSV）讀取資料。
 
+> **注意**：以下 COPY 範例需要在 [Cloudberry Bootcamp Sandbox](https://github.com/apache/cloudberry-bootcamp) 環境中執行，該環境已預先準備好 `/tmp/faa/` 目錄下的 CSV 資料檔案。如果您使用自行建構的環境，可以先跳過此節，閱讀語法說明即可。
+
 ### 基本語法
 
 ```sql
@@ -54,7 +56,7 @@ WITH (FORMAT csv, HEADER true, DELIMITER E'\t');
 ### 使用腳本批次載入
 
 ```sql
--- 在 psql 中執行 SQL 腳本
+-- 在 psql 中執行 SQL 腳本（僅限 Bootcamp Sandbox 環境）
 \i /tmp/faa/copy_into_airlines.sql
 \i /tmp/faa/copy_into_airports.sql
 \i /tmp/faa/copy_into_delay_groups.sql
@@ -74,10 +76,16 @@ COPY 342
 
 ### 匯出資料
 
+不需要外部檔案，可用已載入的資料練習匯出：
+
 ```sql
 -- 匯出到 CSV
 COPY faa.d_airports
 TO '/tmp/airports_export.csv'
+WITH (FORMAT csv, HEADER true);
+
+-- 驗證匯出結果
+COPY faa.d_airports FROM '/tmp/airports_export.csv'
 WITH (FORMAT csv, HEADER true);
 ```
 
@@ -86,6 +94,8 @@ WITH (FORMAT csv, HEADER true);
 ## 方式三：gpfdist 並行載入（推薦大量資料）
 
 `gpfdist` 是 Cloudberry 的檔案伺服器工具，可實現跨所有 Segment 的並行資料載入，效能最佳。
+
+> **注意**：以下 gpfdist 範例需要在 [Cloudberry Bootcamp Sandbox](https://github.com/apache/cloudberry-bootcamp) 環境中執行，該環境已預先準備好 `/tmp/faa/otp*.gz` 資料檔案。如果您使用自行建構的環境，建議先閱讀了解原理，再使用自己的資料練習。
 
 ### 步驟 1：啟動 gpfdist
 
@@ -194,21 +204,36 @@ gpload -f gpload.yaml -l gpload.log
 
 ```sql
 -- 檢查各表的資料量
-SELECT 'airports' AS table_name, COUNT(*) FROM faa.d_airports
+SELECT 'airports' AS table_name, COUNT(*) AS row_count FROM faa.d_airports
 UNION ALL
 SELECT 'airlines', COUNT(*) FROM faa.d_airlines
 UNION ALL
-SELECT 'wac', COUNT(*) FROM faa.d_wac
+SELECT 'cancellation_codes', COUNT(*) FROM faa.d_cancellation_codes
 UNION ALL
-SELECT 'cancellation', COUNT(*) FROM faa.d_cancellation_codes;
-
--- 查看事實表的分區資料分佈
-SELECT schemaname, tablename, pg_size_pretty(pg_total_relation_size(schemaname || '.' || tablename))
-FROM pg_tables
-WHERE schemaname = 'faa' AND tablename LIKE 'otp_r%'
-ORDER BY tablename
-LIMIT 10;
+SELECT 'delay_groups', COUNT(*) FROM faa.d_delay_groups
+UNION ALL
+SELECT 'distance_groups', COUNT(*) FROM faa.d_distance_groups
+UNION ALL
+SELECT 'otp_r (flights)', COUNT(*) FROM faa.otp_r
+UNION ALL
+SELECT 'otp_c (flights)', COUNT(*) FROM faa.otp_c;
 ```
+
+使用本教程的 INSERT 腳本，預期結果：
+
+```
+     table_name     | row_count
+--------------------+-----------
+ airports           |        10
+ airlines           |        10
+ cancellation_codes |         5
+ delay_groups       |        13
+ distance_groups    |        11
+ otp_r (flights)    |       185
+ otp_c (flights)    |       185
+```
+
+如果您額外使用了 COPY 或 gpfdist 載入 Bootcamp 的完整資料集，`otp_r` 和 `otp_c` 的數量會更多。
 
 ## 下一步
 

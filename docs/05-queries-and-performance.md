@@ -54,7 +54,7 @@ WHERE ArrDelay > 0;
 -- 查詢各航空公司的平均延遲時間
 SELECT a.AirlineName, AVG(o.ArrDelay) AS avg_delay
 FROM faa.otp_r o
-JOIN faa.d_airlines a ON o.UniqueCarrier = a.AirlineName
+JOIN faa.d_airlines a ON o.UniqueCarrier = a.UniqueCarrier
 GROUP BY a.AirlineName
 ORDER BY avg_delay DESC
 LIMIT 10;
@@ -99,17 +99,25 @@ EXPLAIN
 SELECT COUNT(*) FROM faa.otp_r WHERE ArrDelay > 60;
 ```
 
-輸出範例：
+輸出範例（分區表會顯示每個分區的掃描計畫）：
 
 ```
-                                       QUERY PLAN
----------------------------------------------------------------------------------------
- Aggregate
-   ->  Gather Motion 2:1  (slice1; segments: 2)
-         ->  Aggregate
-               ->  Seq Scan on otp_r
-                     Filter: (arrdelay > 60)
+                                      QUERY PLAN
+--------------------------------------------------------------------------------------
+ Aggregate  (cost=968.25..968.26 rows=1 width=8)
+   ->  Append  (cost=0.00..954.21 rows=5617 width=0)
+         ->  Seq Scan on otp_r_1_prt_1 otp_r_1  (cost=0.00..70.12 rows=124 width=0)
+               Filter: (arrdelay > 60)
+         ->  Seq Scan on otp_r_1_prt_2 otp_r_2  (cost=0.00..70.12 rows=77 width=0)
+               Filter: (arrdelay > 60)
+         ...（其餘分區省略）
+ Optimizer: Postgres query optimizer
 ```
+
+重點觀察：
+- `Append`：表示掃描多個分區後合併結果
+- `Seq Scan on otp_r_1_prt_N`：對各月份分區進行順序掃描
+- `Filter`：在每個分區上套用篩選條件
 
 ### EXPLAIN ANALYZE（實際執行）
 
@@ -118,7 +126,7 @@ EXPLAIN ANALYZE
 SELECT COUNT(*) FROM faa.otp_r WHERE ArrDelay > 60;
 ```
 
-此命令會實際執行查詢並顯示真實的時間和行數，而非僅估計值。
+`EXPLAIN ANALYZE` 會實際執行查詢，顯示真實的時間和行數（`actual time`、`rows`），而非僅估計值。還會顯示 `Rows Removed by Filter`，幫助判斷篩選條件的選擇性。
 
 ### 關鍵執行計畫節點
 
@@ -215,6 +223,19 @@ SELECT COUNT(*) FROM faa.otp_r
 WHERE FlightDate = '2009-07-15';
 ```
 
+輸出：
+
+```
+                                QUERY PLAN
+--------------------------------------------------------------------------
+ Aggregate  (cost=70.13..70.14 rows=1 width=8)
+   ->  Seq Scan on otp_r_1_prt_2 otp_r  (cost=0.00..70.12 rows=1 width=0)
+         Filter: (flightdate = '2009-07-15'::date)
+ Optimizer: Postgres query optimizer
+```
+
+注意：查詢優化器只掃描了 `otp_r_1_prt_2`（7 月分區），而非所有 17 個分區。這就是分區裁剪的效果 — 大幅減少不必要的 I/O。
+
 ### 3. 適當使用壓縮
 
 ```sql
@@ -252,8 +273,12 @@ WHERE state = 'active';
 -- 查看表的大小
 SELECT pg_size_pretty(pg_total_relation_size('faa.otp_r')) AS table_size;
 
--- 查看各 Segment 的磁碟使用
-SELECT * FROM gp_toolkit.gp_disk_free ORDER BY dfsegment;
+-- 查看各 Segment 的資料大小分佈
+SELECT gp_segment_id, pg_size_pretty(SUM(pg_relation_size(oid))) AS segment_size
+FROM gp_dist_random('pg_class')
+WHERE relnamespace = 'faa'::regnamespace
+GROUP BY gp_segment_id
+ORDER BY gp_segment_id;
 ```
 
 ## 總結

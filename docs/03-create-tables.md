@@ -53,12 +53,12 @@ CREATE TABLE faa.log_table (
 
 ```sql
 -- 先清除已存在的表
-DROP TABLE IF EXISTS faa.d_airports;
-DROP TABLE IF EXISTS faa.d_airlines;
-DROP TABLE IF EXISTS faa.d_wac;
-DROP TABLE IF EXISTS faa.d_cancellation_codes;
-DROP TABLE IF EXISTS faa.d_delay_groups;
-DROP TABLE IF EXISTS faa.d_distance_groups;
+DROP TABLE IF EXISTS faa.d_airports CASCADE;
+DROP TABLE IF EXISTS faa.d_airlines CASCADE;
+DROP TABLE IF EXISTS faa.d_wac CASCADE;
+DROP TABLE IF EXISTS faa.d_cancellation_codes CASCADE;
+DROP TABLE IF EXISTS faa.d_delay_groups CASCADE;
+DROP TABLE IF EXISTS faa.d_distance_groups CASCADE;
 
 -- 機場資訊表
 CREATE TABLE faa.d_airports (
@@ -78,8 +78,9 @@ CREATE TABLE faa.d_airports (
 
 -- 航空公司資訊表
 CREATE TABLE faa.d_airlines (
-    AirlineID   INTEGER,
-    AirlineName TEXT
+    AirlineID     INTEGER,
+    AirlineName   TEXT,
+    UniqueCarrier TEXT
 ) DISTRIBUTED BY (AirlineID);
 
 -- 世界區域代碼表
@@ -180,11 +181,19 @@ PARTITION BY RANGE(FlightDate)
 -- 列出 faa schema 下的所有表
 \dt faa.*
 
--- 查看特定表的結構
+-- 查看特定表的結構（包含分佈策略）
 \d faa.d_airports
 
--- 查看表的分佈策略
-SELECT * FROM gp_distribution_policy WHERE localoid = 'faa.d_airports'::regclass;
+-- 查看各表的儲存方式
+SELECT tablename, CASE
+    WHEN amname IS NULL THEN 'heap'
+    ELSE amname
+  END AS storage
+FROM pg_tables t
+LEFT JOIN pg_class c ON t.tablename = c.relname
+LEFT JOIN pg_am a ON c.relam = a.oid
+WHERE t.schemaname = 'faa' AND c.relkind = 'r'
+ORDER BY tablename;
 ```
 
 ## 下一步

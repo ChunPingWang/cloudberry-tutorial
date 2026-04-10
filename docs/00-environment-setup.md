@@ -111,7 +111,7 @@ make -j$(nproc)
 make install
 
 # 建立並啟動 Demo 叢集
-source /usr/local/cloudberry-db/greenplum_path.sh
+source /usr/local/cloudberry-db/cloudberry-env.sh
 make create-demo-cluster
 
 # 連線到資料庫

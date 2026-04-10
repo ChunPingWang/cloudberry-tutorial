@@ -1,7 +1,11 @@
 -- ============================================
 -- Apache Cloudberry Tutorial
 -- Script 3: 建立資料表
+-- 前置條件：已執行 Script 1 和 Script 2
 -- ============================================
+
+-- 連線到 tutorial 資料庫
+\c tutorial
 
 -- 維度表
 DROP TABLE IF EXISTS faa.d_airports CASCADE;
@@ -22,8 +26,9 @@ CREATE TABLE faa.d_airports (
 
 DROP TABLE IF EXISTS faa.d_airlines CASCADE;
 CREATE TABLE faa.d_airlines (
-    AirlineID   INTEGER,
-    AirlineName TEXT
+    AirlineID     INTEGER,
+    AirlineName   TEXT,
+    UniqueCarrier TEXT
 ) DISTRIBUTED BY (AirlineID);
 
 DROP TABLE IF EXISTS faa.d_wac CASCADE;

@@ -1,7 +1,11 @@
 -- ============================================
 -- Apache Cloudberry Tutorial
 -- Script 5: 範例查詢與效能分析
+-- 前置條件：已執行 Script 4
 -- ============================================
+
+-- 連線到 tutorial 資料庫
+\c tutorial
 
 \timing on
 
@@ -52,3 +56,54 @@ ANALYZE faa.d_airports;
 -- 使用索引後的查詢
 EXPLAIN ANALYZE
 SELECT * FROM faa.d_airports WHERE airport_code = 'LAX';
+
+-- ============================================
+-- 事實表查詢範例
+-- ============================================
+
+-- 收集統計資訊
+ANALYZE faa.otp_r;
+ANALYZE faa.otp_c;
+
+-- 統計總航班數
+SELECT COUNT(*) AS total_flights FROM faa.otp_r;
+
+-- 按航空公司統計航班數
+SELECT a.AirlineName, COUNT(*) AS flight_count
+FROM faa.otp_r o
+JOIN faa.d_airlines a ON o.UniqueCarrier = a.UniqueCarrier
+GROUP BY a.AirlineName
+ORDER BY flight_count DESC;
+
+-- 各航空公司的平均延遲時間
+SELECT a.AirlineName,
+       ROUND(AVG(o.ArrDelay)::NUMERIC, 1) AS avg_delay,
+       COUNT(*) AS flights
+FROM faa.otp_r o
+JOIN faa.d_airlines a ON o.UniqueCarrier = a.UniqueCarrier
+WHERE o.Cancelled = false
+GROUP BY a.AirlineName
+ORDER BY avg_delay DESC;
+
+-- 各機場出發航班數
+SELECT ap.Name AS airport_name,
+       ap.City,
+       COUNT(*) AS departures
+FROM faa.otp_r o
+JOIN faa.d_airports ap ON o.Origin = ap.airport_code
+GROUP BY ap.Name, ap.City
+ORDER BY departures DESC;
+
+-- 按月統計取消率
+SELECT DATE_TRUNC('month', FlightDate) AS month,
+       COUNT(*) AS total,
+       SUM(CASE WHEN Cancelled THEN 1 ELSE 0 END) AS cancelled,
+       ROUND(100.0 * SUM(CASE WHEN Cancelled THEN 1 ELSE 0 END) / COUNT(*), 1) AS cancel_pct
+FROM faa.otp_r
+GROUP BY month
+ORDER BY month;
+
+-- 分區裁剪示範：只掃描 7 月分區
+EXPLAIN
+SELECT COUNT(*) FROM faa.otp_r
+WHERE FlightDate = '2009-07-15';

@@ -71,15 +71,38 @@ REVOKE users FROM lucy;
 
 ## 設定存取認證
 
-建立使用者後，需要修改 Coordinator 節點上的 `pg_hba.conf` 設定檔：
+建立使用者後，需要修改 Coordinator 節點上的 `pg_hba.conf` 設定檔。
+
+### 找到 pg_hba.conf 的位置
+
+`pg_hba.conf` 位於 Coordinator 的資料目錄中，不同安裝方式路徑不同：
+
+```sql
+-- 在 psql 中查詢實際路徑
+SHOW hba_file;
+```
+
+或者透過資料目錄推算：
+
+```sql
+-- 查看 Coordinator 的資料目錄
+SHOW data_directory;
+-- pg_hba.conf 就在該目錄下
+```
+
+常見路徑：
+- Bootcamp Sandbox：`/data0/database/master/gpseg-1/pg_hba.conf`
+- 原始碼 Demo 叢集：`~/cloudberry/gpAux/gpdemo/datadirs/qddir/demoDataDir-1/pg_hba.conf`
+
+### 新增認證規則
 
 ```bash
-# 新增認證規則
-echo "local    gpadmin    lily    md5" >> \
-  /data0/database/master/gpseg-1/pg_hba.conf
+# 取得 pg_hba.conf 路徑（替換為你的實際路徑）
+HBA_FILE=$(psql -d postgres -t -c "SHOW hba_file;" | xargs)
 
-echo "local    gpadmin    lucy    trust" >> \
-  /data0/database/master/gpseg-1/pg_hba.conf
+# 新增認證規則
+echo "local    gpadmin    lily    md5" >> "${HBA_FILE}"
+echo "local    gpadmin    lucy    trust" >> "${HBA_FILE}"
 ```
 
 ### 認證方式說明
